@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#c8641a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Cotizador">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<style>[hidden]{display:none!important}img{max-width:100%}</style>
+<title>Cotizador Taller</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+/* Layout: one-screen app, scrolling view + fixed bottom tab bar; totals bar sticks above tabs on the quote screen. */
+:root{
+  --bg:#eceef1; --surface:#ffffff; --surface-2:#f5f6f8; --line:#d3d7dd;
+  --fg:#1a1f25; --muted:#5d6670; --accent:#c8641a; --accent-fg:#ffffff; --accent-soft:#fbe9db;
+  --ok:#2e7d4f; --warn:#b7791f; --bad:#b23b3b;
+  --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#15181c; --surface:#1f2329; --surface-2:#272c33; --line:#3a414a;
+  --fg:#eceef1; --muted:#9aa3ad; --accent:#e8843a; --accent-fg:#1a1f25; --accent-soft:#3b2a1d;
+  --ok:#5fc78a; --warn:#e2a93b; --bad:#e36b6b; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#15181c; --surface:#1f2329; --surface-2:#272c33; --line:#3a414a;
+  --fg:#eceef1; --muted:#9aa3ad; --accent:#e8843a; --accent-fg:#1a1f25; --accent-soft:#3b2a1d;
+  --ok:#5fc78a; --warn:#e2a93b; --bad:#e36b6b; color-scheme:dark }
+
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.4;margin:0}
+*{box-sizing:border-box}
+button,input,select,textarea{font:inherit;color:inherit}
+input,select,textarea{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 12px;width:100%;min-width:0}
+input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+textarea{resize:vertical;min-height:70px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+label.f>input,label.f>select,label.f>textarea{font-size:15px;text-transform:none;letter-spacing:0;font-weight:400;color:var(--fg)}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.row>*{flex:1 1 140px;min-width:0}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0;line-height:1.05}
+h1{font-size:28px;font-weight:700;letter-spacing:.01em}
+h2{font-size:22px;font-weight:700}
+h3{font-size:17px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.num{font-variant-numeric:tabular-nums}
+
+.app{display:flex;flex-direction:column;height:100%}
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:3px solid var(--accent);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.top .shop{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:600}
+.view{flex:1;overflow-y:auto;padding-block:14px 110px;padding-inline:16px;display:none;flex-direction:column;gap:14px}
+.view.on{display:flex}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:12px}
+.btn{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:10px 14px;font-weight:600;cursor:pointer;white-space:nowrap}
+.btn.p{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.btn.sm{padding:6px 10px;font-size:13px}
+.btn.ghost{background:transparent}
+.btn.danger{color:var(--bad)}
+.btn:disabled{opacity:.5;cursor:default}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--surface-2);border-radius:999px;padding:7px 13px;font-weight:600;font-size:14px;cursor:pointer}
+.chip.on{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.quick{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.quick button{text-align:left;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:9px 10px;cursor:pointer;display:flex;flex-direction:column;gap:2px;min-width:0}
+.quick button b{font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.quick button span{font-size:12px;color:var(--muted)}
+.lines{display:flex;flex-direction:column;gap:8px}
+.line{display:grid;grid-template-columns:1fr auto;gap:6px 8px;border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--surface-2)}
+.line input.desc{grid-column:1/3;background:var(--surface)}
+.line .nums{display:grid;grid-template-columns:1fr 1fr 1.3fr;gap:6px;grid-column:1/2}
+.line .nums input{background:var(--surface);padding:8px}
+.line .sub{grid-column:2/3;display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;gap:4px;min-width:92px}
+.line .sub b{font-family:var(--display);font-size:18px}
+.totals{position:fixed;left:0;right:0;bottom:calc(58px + env(safe-area-inset-bottom,0px));z-index:5;background:var(--surface);border-top:1px solid var(--line);padding:8px 16px;display:none;align-items:center;justify-content:space-between;gap:10px}
+.totals.on{display:flex}
+.totals .t{display:flex;flex-direction:column;line-height:1.1}
+.totals .t small{color:var(--muted);font-size:12px}
+.totals .t b{font-family:var(--display);font-size:24px}
+.totals .acts .btn{padding:10px 11px}
+.totals .acts{display:flex;gap:8px}
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;display:grid;grid-template-columns:repeat(4,1fr);background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+.tabs button{background:none;border:0;padding:9px 4px 8px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px}
+.tabs button svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.tabs button.on{color:var(--accent)}
+.list{display:flex;flex-direction:column;gap:8px}
+.qitem{display:grid;grid-template-columns:1fr auto;gap:2px 10px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;cursor:pointer;text-align:left}
+.qitem .n{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.04em}
+.qitem .c{font-weight:600;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.qitem .tt{font-family:var(--display);font-size:22px;grid-row:1/3;align-self:center}
+.pill{display:inline-block;border-radius:999px;padding:1px 9px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border:1px solid}
+.pill.borrador{color:var(--muted);border-color:var(--line)}
+.pill.enviada{color:var(--warn);border-color:var(--warn)}
+.pill.aceptada{color:var(--ok);border-color:var(--ok)}
+.pill.rechazada{color:var(--bad);border-color:var(--bad)}
+.catrow{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.catrow:last-child{border-bottom:0}
+.catrow .nm{font-weight:600;min-width:0}
+.catrow .nm small{display:block;color:var(--muted);font-weight:400}
+.catrow .pr{font-family:var(--display);font-size:18px}
+.note{font-size:13px;color:var(--muted)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(130px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:999px;font-weight:600;z-index:9;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw;text-align:center}
+.toast.on{opacity:1}
+.confirm{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:8;display:none;align-items:center;justify-content:center;padding:16px}
+.confirm.on{display:flex}
+.confirm .box{background:var(--surface);border-radius:12px;padding:18px;max-width:360px;width:100%;display:flex;flex-direction:column;gap:14px}
+.hdr{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.empty{color:var(--muted);text-align:center;padding:24px 8px}
+.logoprev{height:48px;width:auto;max-width:160px;object-fit:contain;border:1px solid var(--line);border-radius:6px;background:#fff;padding:3px}
+@media (prefers-reduced-motion:reduce){.toast{transition:none}}
+</style>
+
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div><div class="shop" id="hdrShop">Taller</div><h1 id="hdrTitle">Nueva cotización</h1></div>
+    <button class="btn sm" id="btnNew" type="button">+ Nueva</button>
+  </header>
+
+  <!-- VIEW: NUEVA / EDITAR -->
+  <section class="view on" id="vQuote">
+    <div class="card">
+      <div class="hdr"><h3>Cliente</h3><span class="note num" id="qNumber"></span></div>
+      <div class="row">
+        <label class="f">Nombre<input id="cName" placeholder="Juan Pérez" autocomplete="off"></label>
+        <label class="f">Teléfono<input id="cPhone" inputmode="tel" placeholder="260 4xx xxxx"></label>
+      </div>
+      <label class="f">Trabajo / vehículo<input id="cRef" placeholder="Portón 3x2 m · Honda Wave 110 · Llanta Al 17"></label>
+    </div>
+
+    <div class="card">
+      <h3>Rubro</h3>
+      <div class="chips" id="rubroChips"></div>
+      <h3>Agregar rápido</h3>
+      <div class="quick" id="quick"></div>
+      <button class="btn sm ghost" id="btnBlank" type="button">+ Ítem libre</button>
+    </div>
+
+    <div class="card">
+      <h3>Ítems</h3>
+      <div class="lines" id="lines"></div>
+      <div class="row">
+        <label class="f">Descuento %<input id="qDisc" type="number" inputmode="decimal" min="0" max="100" step="0.5" value="0"></label>
+        <label class="f">IVA %<input id="qIva" type="number" inputmode="decimal" min="0" max="100" step="0.5"></label>
+        <label class="f">Válida (días)<input id="qDays" type="number" inputmode="numeric" min="1" value="15"></label>
+      </div>
+      <label class="f">Notas para el cliente<textarea id="qNotes" placeholder="Incluye materiales y colocación. Seña 50% para iniciar."></textarea></label>
+      <label class="f">Estado<select id="qStatus"><option value="borrador">Borrador</option><option value="enviada">Enviada</option><option value="aceptada">Aceptada</option><option value="rechazada">Rechazada</option></select></label>
+      <div class="row" id="editActs" hidden>
+        <button class="btn sm" id="btnDup" type="button">Duplicar</button>
+        <button class="btn sm danger" id="btnDel" type="button">Eliminar</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- VIEW: LISTA -->
+  <section class="view" id="vList">
+    <input id="search" placeholder="Buscar por cliente, número o trabajo" autocomplete="off">
+    <div class="chips" id="filterChips">
+      <button class="chip on" data-f="todas" type="button">Todas</button>
+      <button class="chip" data-f="borrador" type="button">Borrador</button>
+      <button class="chip" data-f="enviada" type="button">Enviadas</button>
+      <button class="chip" data-f="aceptada" type="button">Aceptadas</button>
+    </div>
+    <div class="list" id="qList"></div>
+  </section>
+
+  <!-- VIEW: CATALOGO -->
+  <section class="view" id="vCat">
+    <p class="note">Los ítems de cada rubro aparecen en "Agregar rápido". Los precios iniciales son de ejemplo: editalos con tus valores.</p>
+    <div class="card">
+      <h3>Nuevo ítem</h3>
+      <div class="row">
+        <label class="f">Rubro<select id="ciRubro"></select></label>
+        <label class="f">Unidad<select id="ciUnit"><option>u</option><option>h</option><option>m</option><option>m²</option><option>kg</option><option>global</option></select></label>
+      </div>
+      <label class="f">Nombre<input id="ciName" placeholder="Soldadura TIG aluminio"></label>
+      <label class="f">Precio<input id="ciPrice" type="number" inputmode="decimal" min="0" step="1" placeholder="0"></label>
+      <button class="btn p" id="btnAddCat" type="button">Guardar ítem</button>
+    </div>
+    <div id="catGroups"></div>
+  </section>
+
+  <!-- VIEW: AJUSTES -->
+  <section class="view" id="vSet">
+    <div class="card">
+      <h3>Datos del taller (salen en el PDF)</h3>
+      <label class="f">Nombre del taller<input id="sName" placeholder="Taller Franco"></label>
+      <div class="row">
+        <label class="f">CUIT<input id="sCuit" inputmode="numeric" placeholder="20-xxxxxxxx-x"></label>
+        <label class="f">Teléfono / WhatsApp<input id="sPhone" inputmode="tel"></label>
+      </div>
+      <label class="f">Dirección<input id="sAddr" placeholder="San Rafael, Mendoza"></label>
+      <label class="f">Email<input id="sMail" inputmode="email"></label>
+      <div class="row">
+        <label class="f">Logo<input id="sLogo" type="file" accept="image/*"></label>
+        <div style="display:flex;align-items:flex-end;gap:8px"><img id="logoPrev" class="logoprev" alt="" hidden><button class="btn sm ghost" id="btnLogoDel" type="button" hidden>Quitar</button></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Cotización</h3>
+      <div class="row">
+        <label class="f">Moneda<input id="sCur" value="ARS" placeholder="ARS"></label>
+        <label class="f">IVA por defecto %<input id="sIva" type="number" inputmode="decimal" min="0" value="0"></label>
+        <label class="f">Prefijo N°<input id="sPrefix" value="P-"></label>
+        <label class="f">Próximo N°<input id="sNext" type="number" inputmode="numeric" min="1" value="1"></label>
+      </div>
+      <label class="f">Condiciones (pie del PDF)<textarea id="sTerms">Presupuesto sujeto a cambios de precio en materiales. Seña del 50% para iniciar el trabajo, saldo contra entrega.</textarea></label>
+      <button class="btn p" id="btnSaveSet" type="button">Guardar ajustes</button>
+    </div>
+    <div class="card">
+      <h3>Datos</h3>
+      <p class="note">Las cotizaciones y el catálogo se guardan en este dispositivo. Exportá un respaldo para pasarlos a otro teléfono.</p>
+      <div class="row">
+        <button class="btn" id="btnBackup" type="button">Exportar respaldo</button>
+        <label class="btn" style="text-align:center">Importar respaldo<input id="restore" type="file" accept="application/json" hidden></label>
+      </div>
+    </div>
+  </section>
+
+  <div class="totals" id="totals">
+    <div class="t"><small id="tSub">Subtotal $0</small><b class="num" id="tTot">$0</b></div>
+    <div class="acts"><button class="btn" id="btnSave" type="button">Guardar</button><button class="btn p" id="btnImg" type="button">Imagen</button><button class="btn" id="btnPdf" type="button">PDF</button></div>
+  </div>
+
+  <nav class="tabs">
+    <button class="on" data-v="vQuote" type="button"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nueva</button>
+    <button data-v="vList" type="button"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Cotizaciones</button>
+    <button data-v="vCat" type="button"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg>Catálogo</button>
+    <button data-v="vSet" type="button"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7 7 0 0 0-2-1.2L14.2 2h-4.4l-.4 2.7a7 7 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.3-1a7 7 0 0 0 2 1.2l.4 2.7h4.4l.4-2.7a7 7 0 0 0 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2z"/></svg>Ajustes</button>
+  </nav>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="confirm" id="confirm"><div class="box"><h2 id="cfTitle">¿Confirmar?</h2><p class="note" id="cfMsg"></p><div class="row"><button class="btn" id="cfNo" type="button">Cancelar</button><button class="btn p danger" id="cfYes" type="button">Sí, eliminar</button></div></div></div>
+
+<script>
+(function(){
+"use strict";
+const $=id=>document.getElementById(id);
+const RUBROS=["Herrería y soldadura","Mecánica de motos","Soldadura en aluminio"];
+const SEED=[
+ ["Herrería y soldadura","Visita y relevamiento","u",8000],
+ ["Herrería y soldadura","Portón corredizo (fabricación)","m²",65000],
+ ["Herrería y soldadura","Reja de hierro (fabricación)","m²",48000],
+ ["Herrería y soldadura","Caño estructural 40x40 x 1.6","m",6500],
+ ["Herrería y soldadura","Chapa lisa 1.6 mm","m²",22000],
+ ["Herrería y soldadura","Soldadura eléctrica / MIG","h",12000],
+ ["Herrería y soldadura","Pintura antióxido + esmalte","m²",9000],
+ ["Herrería y soldadura","Colocación en obra","h",10000],
+ ["Mecánica de motos","Diagnóstico","u",5000],
+ ["Mecánica de motos","Service completo (aceite, filtro, ajustes)","u",25000],
+ ["Mecánica de motos","Cambio de aceite y filtro","u",9000],
+ ["Mecánica de motos","Cambio kit de transmisión","u",18000],
+ ["Mecánica de motos","Pastillas de freno (colocación)","u",8000],
+ ["Mecánica de motos","Ajuste de válvulas","u",15000],
+ ["Mecánica de motos","Limpieza y sincronización de carburador","u",14000],
+ ["Mecánica de motos","Mano de obra mecánica","h",11000],
+ ["Soldadura en aluminio","Soldadura TIG aluminio","h",18000],
+ ["Soldadura en aluminio","Reparación de llanta de aluminio","u",28000],
+ ["Soldadura en aluminio","Reparación de cárter / tapa de motor","u",35000],
+ ["Soldadura en aluminio","Reparación de radiador","u",30000],
+ ["Soldadura en aluminio","Fabricación de pieza a medida","h",16000],
+ ["Soldadura en aluminio","Material aluminio","kg",9500]
+];
+const DEF_SET={name:"",cuit:"",phone:"",addr:"",mail:"",logo:"",cur:"ARS",iva:0,prefix:"P-",next:1,terms:$("sTerms").value};
+
+// ---- storage (per device) ----
+function load(k,fb){try{const v=localStorage.getItem("ct_"+k);return v?JSON.parse(v):fb}catch(e){return fb}}
+function store(k,v){try{localStorage.setItem("ct_"+k,JSON.stringify(v));return true}catch(e){toast("No se pudo guardar en este dispositivo");return false}}
+let settings=Object.assign({},DEF_SET,load("settings",{}));
+let catalog=load("catalog",null);
+if(!catalog){catalog=SEED.map((s,i)=>({id:"c"+i,rubro:s[0],name:s[1],unit:s[2],price:s[3]}));store("catalog",catalog)}
+let quotes=load("quotes",[]);
+let cur=null; // quote being edited
+let rubro=RUBROS[0];
+
+const fmt=n=>{n=Math.round(n);const s=Math.abs(n).toLocaleString("es-AR");return (n<0?"-":"")+"$"+s};
+const today=()=>new Date().toISOString().slice(0,10);
+const dmy=iso=>{const [y,m,d]=iso.split("-");return d+"/"+m+"/"+y};
+function toast(m){const t=$("toast");t.textContent=m;t.classList.add("on");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("on"),2200)}
+function confirmBox(title,msg,cb){$("cfTitle").textContent=title;$("cfMsg").textContent=msg;$("confirm").classList.add("on");$("cfYes").onclick=()=>{$("confirm").classList.remove("on");cb()};$("cfNo").onclick=()=>$("confirm").classList.remove("on")}
+
+// ---- quote model ----
+function blank(){return {id:"q"+Date.now(),number:"",date:today(),client:"",phone:"",ref:"",rubro:rubro,lines:[],disc:0,iva:Number(settings.iva)||0,days:15,notes:"",status:"borrador"}}
+function calc(q){
+  const sub=q.lines.reduce((a,l)=>a+(Number(l.qty)||0)*(Number(l.price)||0),0);
+  const disc=sub*(Number(q.disc)||0)/100, base=sub-disc, iva=base*(Number(q.iva)||0)/100;
+  return {sub,disc,base,iva,total:base+iva};
+}
+function readForm(){
+  cur.client=$("cName").value.trim();cur.phone=$("cPhone").value.trim();cur.ref=$("cRef").value.trim();
+  cur.disc=Number($("qDisc").value)||0;cur.iva=Number($("qIva").value)||0;cur.days=Number($("qDays").value)||15;
+  cur.notes=$("qNotes").value.trim();cur.status=$("qStatus").value;cur.rubro=rubro;
+  cur.lines.forEach((l,i)=>{const el=$("lines").children[i];if(!el)return;l.desc=el.querySelector(".desc").value;l.qty=Number(el.querySelector(".qty").value)||0;l.unit=el.querySelector(".unit").value;l.price=Number(el.querySelector(".price").value)||0});
+}
+function fillForm(){
+  $("cName").value=cur.client;$("cPhone").value=cur.phone;$("cRef").value=cur.ref;
+  $("qDisc").value=cur.disc;$("qIva").value=cur.iva;$("qDays").value=cur.days;$("qNotes").value=cur.notes;$("qStatus").value=cur.status;
+  rubro=cur.rubro||RUBROS[0];
+  $("qNumber").textContent=cur.number?cur.number+" · "+dmy(cur.date):"Se numera al guardar";
+  $("hdrTitle").textContent=cur.number?"Cotización "+cur.number:"Nueva cotización";
+  $("editActs").hidden=!cur.number;
+  renderChips();renderQuick();renderLines();
+}
+function renderChips(){
+  $("rubroChips").innerHTML=RUBROS.map(r=>`<button type="button" class="chip${r===rubro?" on":""}" data-r="${r}">${r}</button>`).join("");
+  $("rubroChips").querySelectorAll(".chip").forEach(b=>b.onclick=()=>{rubro=b.dataset.r;renderChips();renderQuick()});
+}
+function renderQuick(){
+  const items=catalog.filter(c=>c.rubro===rubro);
+  $("quick").innerHTML=items.map(c=>`<button type="button" data-id="${c.id}"><b>${esc(c.name)}</b><span class="num">${fmt(c.price)} / ${c.unit}</span></button>`).join("")||`<span class="note">Sin ítems en este rubro. Agregalos en Catálogo.</span>`;
+  $("quick").querySelectorAll("button").forEach(b=>b.onclick=()=>{const c=catalog.find(x=>x.id===b.dataset.id);readForm();cur.lines.push({desc:c.name,qty:1,unit:c.unit,price:c.price});renderLines();toast("Agregado: "+c.name)});
+}
+function renderLines(){
+  const L=$("lines");
+  L.innerHTML=cur.lines.map((l,i)=>`<div class="line">
+    <input class="desc" value="${esc(l.desc)}" placeholder="Descripción" aria-label="Descripción">
+    <div class="nums"><input class="qty num" type="number" inputmode="decimal" min="0" step="0.5" value="${l.qty}" aria-label="Cantidad"><input class="unit" value="${esc(l.unit)}" aria-label="Unidad"><input class="price num" type="number" inputmode="decimal" min="0" step="1" value="${l.price}" aria-label="Precio unitario"></div>
+    <div class="sub"><b class="num" data-sub>${fmt(l.qty*l.price)}</b><button type="button" class="btn sm ghost danger" data-del="${i}">Quitar</button></div></div>`).join("")||`<div class="empty">Tocá un ítem de "Agregar rápido" o creá uno libre.</div>`;
+  L.querySelectorAll("input").forEach(inp=>inp.addEventListener("input",()=>{readForm();L.querySelectorAll(".line").forEach((el,i)=>{el.querySelector("[data-sub]").textContent=fmt(cur.lines[i].qty*cur.lines[i].price)});renderTotals()}));
+  L.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{readForm();cur.lines.splice(Number(b.dataset.del),1);renderLines()});
+  renderTotals();
+}
+function renderTotals(){const t=calc(cur);$("tSub").textContent="Subtotal "+fmt(t.sub)+(t.disc?" · desc. -"+fmt(t.disc):"")+(t.iva?" · IVA "+fmt(t.iva):"");$("tTot").textContent=fmt(t.total)}
+["qDisc","qIva","qDays"].forEach(id=>$(id).addEventListener("input",()=>{readForm();renderTotals()}));
+
+function save(silent){
+  readForm();
+  if(!cur.client){toast("Ingresá el nombre del cliente");$("cName").focus();return false}
+  if(!cur.number){cur.number=settings.prefix+String(settings.next).padStart(4,"0");settings.next=Number(settings.next)+1;store("settings",settings);$("sNext").value=settings.next}
+  const i=quotes.findIndex(q=>q.id===cur.id);
+  if(i>=0)quotes[i]=cur;else quotes.unshift(cur);
+  store("quotes",quotes);fillForm();if(!silent)toast("Guardada "+cur.number);return true;
+}
+function newQuote(){cur=blank();fillForm();show("vQuote");$("cName").focus()}
+function openQuote(id){cur=JSON.parse(JSON.stringify(quotes.find(q=>q.id===id)));fillForm();show("vQuote")}
+
+$("btnNew").onclick=newQuote;
+$("btnSave").onclick=()=>save(false);
+$("btnBlank").onclick=()=>{readForm();cur.lines.push({desc:"",qty:1,unit:"u",price:0});renderLines();const d=$("lines").lastElementChild.querySelector(".desc");if(d)d.focus()};
+$("btnDup").onclick=()=>{readForm();const c=JSON.parse(JSON.stringify(cur));c.id="q"+Date.now();c.number="";c.date=today();c.status="borrador";cur=c;fillForm();toast("Copia lista, guardala para numerarla")};
+$("btnDel").onclick=()=>confirmBox("Eliminar "+cur.number,"Se borra la cotización de "+cur.client+". No se puede deshacer.",()=>{quotes=quotes.filter(q=>q.id!==cur.id);store("quotes",quotes);newQuote();toast("Eliminada")});
+
+// ---- list ----
+let filter="todas";
+$("filterChips").querySelectorAll(".chip").forEach(b=>b.onclick=()=>{filter=b.dataset.f;$("filterChips").querySelectorAll(".chip").forEach(x=>x.classList.toggle("on",x===b));renderList()});
+$("search").addEventListener("input",renderList);
+function renderList(){
+  const s=$("search").value.toLowerCase();
+  const rows=quotes.filter(q=>(filter==="todas"||q.status===filter)&&(!s||(q.client+q.number+q.ref).toLowerCase().includes(s)));
+  $("qList").innerHTML=rows.map(q=>`<button type="button" class="qitem" data-id="${q.id}"><span class="n num">${q.number} · ${dmy(q.date)} <span class="pill ${q.status}">${q.status}</span></span><span class="c">${esc(q.client)}${q.ref?" · "+esc(q.ref):""}</span><span class="tt num">${fmt(calc(q).total)}</span></button>`).join("")||`<div class="empty">${quotes.length?"Nada coincide con el filtro.":"Todavía no hay cotizaciones guardadas."}</div>`;
+  $("qList").querySelectorAll(".qitem").forEach(b=>b.onclick=()=>openQuote(b.dataset.id));
+}
+
+// ---- catalog ----
+$("ciRubro").innerHTML=RUBROS.map(r=>`<option>${r}</option>`).join("");
+$("btnAddCat").onclick=()=>{
+  const name=$("ciName").value.trim(),price=Number($("ciPrice").value);
+  if(!name){toast("Poné un nombre");return}
+  catalog.push({id:"c"+Date.now(),rubro:$("ciRubro").value,name,unit:$("ciUnit").value,price:price||0});
+  store("catalog",catalog);$("ciName").value="";$("ciPrice").value="";renderCat();toast("Ítem guardado");
+};
+function renderCat(){
+  $("catGroups").innerHTML=RUBROS.map(r=>`<div class="card" style="margin-bottom:14px"><h3>${r}</h3><div>${catalog.filter(c=>c.rubro===r).map(c=>`<div class="catrow"><div class="nm">${esc(c.name)}<small>por ${esc(c.unit)}</small></div><input class="pr num" type="number" inputmode="decimal" min="0" value="${c.price}" data-p="${c.id}" style="width:120px;padding:6px 8px" aria-label="Precio"><button type="button" class="btn sm ghost danger" data-x="${c.id}">✕</button></div>`).join("")||`<div class="empty">Sin ítems</div>`}</div></div>`).join("");
+  $("catGroups").querySelectorAll("[data-p]").forEach(i=>i.addEventListener("change",()=>{const c=catalog.find(x=>x.id===i.dataset.p);c.price=Number(i.value)||0;store("catalog",catalog);toast("Precio actualizado")}));
+  $("catGroups").querySelectorAll("[data-x]").forEach(b=>b.onclick=()=>{catalog=catalog.filter(x=>x.id!==b.dataset.x);store("catalog",catalog);renderCat()});
+}
+
+// ---- settings ----
+function fillSet(){$("sName").value=settings.name;$("sCuit").value=settings.cuit;$("sPhone").value=settings.phone;$("sAddr").value=settings.addr;$("sMail").value=settings.mail;$("sCur").value=settings.cur;$("sIva").value=settings.iva;$("sPrefix").value=settings.prefix;$("sNext").value=settings.next;$("sTerms").value=settings.terms;
+  $("logoPrev").hidden=!settings.logo;$("btnLogoDel").hidden=!settings.logo;if(settings.logo)$("logoPrev").src=settings.logo;$("hdrShop").textContent=settings.name||"Taller"}
+$("btnSaveSet").onclick=()=>{settings.name=$("sName").value.trim();settings.cuit=$("sCuit").value.trim();settings.phone=$("sPhone").value.trim();settings.addr=$("sAddr").value.trim();settings.mail=$("sMail").value.trim();settings.cur=$("sCur").value.trim()||"ARS";settings.iva=Number($("sIva").value)||0;settings.prefix=$("sPrefix").value;settings.next=Number($("sNext").value)||1;settings.terms=$("sTerms").value;if(store("settings",settings)){fillSet();toast("Ajustes guardados")}};
+$("sLogo").addEventListener("change",e=>{const f=e.target.files[0];if(!f)return;const img=new Image();const rd=new FileReader();rd.onload=()=>{img.onload=()=>{const c=document.createElement("canvas");const s=Math.min(1,400/img.width,160/img.height);c.width=img.width*s;c.height=img.height*s;c.getContext("2d").drawImage(img,0,0,c.width,c.height);settings.logo=c.toDataURL("image/png");store("settings",settings);fillSet();loadLogo();toast("Logo cargado")};img.src=rd.result};rd.readAsDataURL(f)});
+$("btnLogoDel").onclick=()=>{settings.logo="";store("settings",settings);fillSet();loadLogo()};
+$("btnBackup").onclick=async()=>{const dl=await getDownloads();if(!dl)return;
+  try{await dl.save({filename:"cotizador-respaldo-"+today()+".json",data:JSON.stringify({settings,catalog,quotes})});toast("Respaldo exportado")}catch(e){if(e&&e.code!=="declined")toast("No se pudo exportar")}};
+$("restore").addEventListener("change",e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{const d=JSON.parse(rd.result);if(d.settings)settings=Object.assign({},DEF_SET,d.settings);if(Array.isArray(d.catalog))catalog=d.catalog;if(Array.isArray(d.quotes))quotes=d.quotes;store("settings",settings);store("catalog",catalog);store("quotes",quotes);fillSet();renderCat();renderList();toast("Respaldo importado")}catch(err){toast("El archivo no es un respaldo válido")}};rd.readAsText(f);e.target.value=""});
+
+// ---- PDF ----
+async function makePdf(){
+  if(!save(true))return;
+  if(!window.jspdf){toast("No se pudo cargar el generador de PDF");return}
+  const q=cur,t=calc(q),S=settings;
+  const doc=new window.jspdf.jsPDF({unit:"mm",format:"a4"});
+  const W=210,M=15; let y=M;
+  doc.setFillColor(200,100,26);doc.rect(0,0,W,4,"F");y=12;
+  if(S.logo){try{doc.addImage(S.logo,"PNG",M,y,32,13,undefined,"FAST")}catch(e){}}
+  doc.setFont("helvetica","bold");doc.setFontSize(16);doc.text(S.name||"Taller",S.logo?M+36:M,y+5);
+  doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(90);
+  const head=[S.addr,S.phone?"Tel/WhatsApp: "+S.phone:"",S.mail,S.cuit?"CUIT: "+S.cuit:""].filter(Boolean);
+  head.forEach((h,i)=>doc.text(h,S.logo?M+36:M,y+10+i*4));
+  doc.setTextColor(0);doc.setFont("helvetica","bold");doc.setFontSize(20);doc.text("PRESUPUESTO",W-M,y+5,{align:"right"});
+  doc.setFontSize(10);doc.setFont("helvetica","normal");
+  const vence=new Date(q.date+"T12:00:00");vence.setDate(vence.getDate()+q.days);
+  [["N°",q.number],["Fecha",dmy(q.date)],["Válido hasta",vence.toLocaleDateString("es-AR")],["Rubro",q.rubro]].forEach((r,i)=>{doc.setFont("helvetica","bold");doc.text(r[0]+":",W-M-40,y+12+i*5);doc.setFont("helvetica","normal");doc.text(String(r[1]),W-M,y+12+i*5,{align:"right"})});
+  y+=36;
+  doc.setDrawColor(211,215,221);doc.line(M,y,W-M,y);y+=6;
+  doc.setFont("helvetica","bold");doc.setFontSize(9);doc.setTextColor(90);doc.text("CLIENTE",M,y);doc.setTextColor(0);
+  doc.setFontSize(11);doc.text(q.client,M,y+5);doc.setFont("helvetica","normal");doc.setFontSize(10);
+  let cy=y+10;if(q.phone){doc.text("Tel: "+q.phone,M,cy);cy+=5}if(q.ref){doc.text("Trabajo: "+q.ref,M,cy);cy+=5}
+  y=cy+3;
+  doc.autoTable({startY:y,margin:{left:M,right:M},head:[["Descripción","Cant.","Un.","P. unitario","Importe"]],
+    body:q.lines.map(l=>[l.desc||"-",String(l.qty),l.unit,fmt(l.price),fmt(l.qty*l.price)]),
+    styles:{font:"helvetica",fontSize:9.5,cellPadding:2.2,lineColor:[211,215,221],lineWidth:.2},
+    headStyles:{fillColor:[26,31,37],textColor:255,fontStyle:"bold"},
+    columnStyles:{0:{cellWidth:"auto"},1:{halign:"right",cellWidth:16},2:{cellWidth:14},3:{halign:"right",cellWidth:30},4:{halign:"right",cellWidth:32}},
+    alternateRowStyles:{fillColor:[245,246,248]}});
+  y=doc.lastAutoTable.finalY+5;
+  const rows=[["Subtotal",fmt(t.sub)]];if(t.disc)rows.push(["Descuento "+q.disc+"%","-"+fmt(t.disc)]);if(t.iva)rows.push(["IVA "+q.iva+"%",fmt(t.iva)]);
+  doc.setFontSize(10);rows.forEach(r=>{doc.text(r[0],W-M-45,y);doc.text(r[1],W-M,y,{align:"right"});y+=5.5});
+  doc.setFillColor(200,100,26);doc.rect(W-M-75,y-1,75,9,"F");doc.setTextColor(255);doc.setFont("helvetica","bold");doc.setFontSize(12);
+  doc.text("TOTAL "+S.cur,W-M-72,y+5);doc.text(fmt(t.total),W-M-3,y+5,{align:"right"});doc.setTextColor(0);doc.setFont("helvetica","normal");
+  y+=16;
+  if(q.notes){doc.setFontSize(10);doc.setFont("helvetica","bold");doc.text("Notas",M,y);doc.setFont("helvetica","normal");const nl=doc.splitTextToSize(q.notes,W-2*M);doc.text(nl,M,y+5);y+=5+nl.length*4.5+4}
+  if(S.terms){doc.setFontSize(8.5);doc.setTextColor(90);const tl=doc.splitTextToSize(S.terms,W-2*M);doc.text(tl,M,Math.max(y+4,270-tl.length*4));doc.setTextColor(0)}
+  const blob=doc.output("blob");
+  const name=(q.number+"-"+q.client).replace(/[^\w\-áéíóúñÁÉÍÓÚÑ ]+/g,"").replace(/\s+/g,"_")+".pdf";
+  const dl=await getDownloads(true);
+  if(!dl){showImage();return}
+  try{await dl.save({filename:name,data:blob});toast("PDF listo")}catch(e){if(e&&e.code==="declined")return;showImage()}
+}
+
+// ---- Imagen del presupuesto (funciona en cualquier celular: mantener presionado para guardar/compartir) ----
+function drawQuote(q){
+  const S=settings,t=calc(q),W=1240,P=70;
+  const c=document.createElement("canvas");c.width=W;const g=c.getContext("2d");
+  // medir alto
+  const lineH=38, notesLines=q.notes?wrap(g,q.notes,W-2*P,"26px Helvetica,Arial"):[], termLines=S.terms?wrap(g,S.terms,W-2*P,"22px Helvetica,Arial"):[];
+  const rowsH=q.lines.reduce((a,l)=>a+Math.max(1,wrap(g,l.desc||"-",560,"26px Helvetica,Arial").length)*34+16,0);
+  let H=430+rowsH+200+(notesLines.length?notesLines.length*32+60:0)+termLines.length*28+80;
+  c.height=H;
+  g.fillStyle="#ffffff";g.fillRect(0,0,W,H);
+  g.fillStyle="#c8641a";g.fillRect(0,0,W,16);
+  let y=70,x=P;
+  if(S.logo){try{const im=logoImg;if(im&&im.complete){const r=Math.min(220/im.width,90/im.height);g.drawImage(im,x,y-10,im.width*r,im.height*r);x+=im.width*r+24}}catch(e){}}
+  g.fillStyle="#1a1f25";g.font="bold 44px Helvetica,Arial";g.fillText(S.name||"Taller",x,y+30);
+  g.font="24px Helvetica,Arial";g.fillStyle="#5d6670";
+  [S.addr,S.phone?"Tel/WhatsApp: "+S.phone:"",S.mail,S.cuit?"CUIT: "+S.cuit:""].filter(Boolean).forEach((h,i)=>g.fillText(h,x,y+70+i*30));
+  g.textAlign="right";g.fillStyle="#1a1f25";g.font="bold 56px Helvetica,Arial";g.fillText("PRESUPUESTO",W-P,y+30);
+  const vence=new Date(q.date+"T12:00:00");vence.setDate(vence.getDate()+q.days);
+  g.font="26px Helvetica,Arial";
+  [["N°",q.number],["Fecha",dmy(q.date)],["Válido hasta",vence.toLocaleDateString("es-AR")],["Rubro",q.rubro]].forEach((r,i)=>{g.fillStyle="#5d6670";g.fillText(r[0]+":  ",W-P-260,y+80+i*34);g.fillStyle="#1a1f25";g.fillText(String(r[1]),W-P,y+80+i*34)});
+  g.textAlign="left";y=260;
+  g.strokeStyle="#d3d7dd";g.lineWidth=2;g.beginPath();g.moveTo(P,y);g.lineTo(W-P,y);g.stroke();y+=40;
+  g.fillStyle="#5d6670";g.font="bold 22px Helvetica,Arial";g.fillText("CLIENTE",P,y);
+  g.fillStyle="#1a1f25";g.font="bold 30px Helvetica,Arial";g.fillText(q.client,P,y+40);y+=70;
+  g.font="26px Helvetica,Arial";if(q.phone){g.fillText("Tel: "+q.phone,P,y);y+=32}if(q.ref){g.fillText("Trabajo: "+q.ref,P,y);y+=32}
+  y+=20;
+  // tabla
+  const cols=[P,P+560,P+660,P+740,W-P];
+  g.fillStyle="#1a1f25";g.fillRect(P,y,W-2*P,44);g.fillStyle="#fff";g.font="bold 24px Helvetica,Arial";
+  g.fillText("Descripción",cols[0]+12,y+30);g.textAlign="right";g.fillText("Cant.",cols[2]-12,y+30);g.textAlign="left";g.fillText("Un.",cols[2]+8,y+30);g.textAlign="right";g.fillText("P. unitario",cols[3]+170,y+30);g.fillText("Importe",cols[4]-12,y+30);g.textAlign="left";
+  y+=44;let alt=false;
+  q.lines.forEach(l=>{const dl=wrap(g,l.desc||"-",540,"26px Helvetica,Arial");const rh=dl.length*34+16;
+    if(alt){g.fillStyle="#f5f6f8";g.fillRect(P,y,W-2*P,rh)}alt=!alt;
+    g.fillStyle="#1a1f25";g.font="26px Helvetica,Arial";dl.forEach((s,i)=>g.fillText(s,cols[0]+12,y+34+i*34));
+    g.textAlign="right";g.fillText(String(l.qty),cols[2]-12,y+34);g.textAlign="left";g.fillText(l.unit,cols[2]+8,y+34);g.textAlign="right";g.fillText(fmt(l.price),cols[3]+170,y+34);g.fillText(fmt(l.qty*l.price),cols[4]-12,y+34);g.textAlign="left";
+    y+=rh;g.strokeStyle="#d3d7dd";g.beginPath();g.moveTo(P,y);g.lineTo(W-P,y);g.stroke()});
+  y+=36;g.textAlign="right";g.font="26px Helvetica,Arial";g.fillStyle="#1a1f25";
+  const rows=[["Subtotal",fmt(t.sub)]];if(t.disc)rows.push(["Descuento "+q.disc+"%","-"+fmt(t.disc)]);if(t.iva)rows.push(["IVA "+q.iva+"%",fmt(t.iva)]);
+  rows.forEach(r=>{g.fillText(r[0],W-P-260,y);g.fillText(r[1],W-P,y);y+=36});
+  g.fillStyle="#c8641a";g.fillRect(W-P-480,y-4,480,64);g.fillStyle="#fff";g.font="bold 34px Helvetica,Arial";g.textAlign="left";g.fillText("TOTAL "+S.cur,W-P-460,y+40);g.textAlign="right";g.fillText(fmt(t.total),W-P-16,y+40);g.textAlign="left";
+  y+=110;
+  if(notesLines.length){g.fillStyle="#1a1f25";g.font="bold 26px Helvetica,Arial";g.fillText("Notas",P,y);y+=36;g.font="26px Helvetica,Arial";notesLines.forEach(s=>{g.fillText(s,P,y);y+=32});y+=24}
+  if(termLines.length){g.fillStyle="#5d6670";g.font="22px Helvetica,Arial";termLines.forEach(s=>{g.fillText(s,P,y);y+=28})}
+  return c;
+}
+function wrap(g,text,maxW,font){g.font=font;const out=[];String(text).split(/\n/).forEach(par=>{let line="";par.split(" ").forEach(w=>{const test=line?line+" "+w:w;if(g.measureText(test).width>maxW&&line){out.push(line);line=w}else line=test});out.push(line)});return out}
+let logoImg=null;function loadLogo(){if(settings.logo){logoImg=new Image();logoImg.src=settings.logo}else logoImg=null}
+function quoteText(q){const t=calc(q);const L=[(settings.name||"Taller")+" · PRESUPUESTO "+q.number+" ("+dmy(q.date)+")","Cliente: "+q.client+(q.ref?" · "+q.ref:""),""];q.lines.forEach(l=>L.push("• "+l.desc+" — "+l.qty+" "+l.unit+" x "+fmt(l.price)+" = "+fmt(l.qty*l.price)));L.push("");L.push("Subtotal: "+fmt(t.sub));if(t.disc)L.push("Descuento "+q.disc+"%: -"+fmt(t.disc));if(t.iva)L.push("IVA "+q.iva+"%: "+fmt(t.iva));L.push("TOTAL "+settings.cur+": "+fmt(t.total));L.push("Válido "+q.days+" días.");if(q.notes)L.push("",q.notes);if(settings.phone)L.push("",settings.name+" · "+settings.phone);return L.join("\n")}
+function showImage(){
+  if(!save(true))return;
+  const q=cur;let box=$("imgPrev");
+  if(!box){box=document.createElement("div");box.id="imgPrev";box.className="confirm";box.innerHTML='<div class="box" style="max-width:720px;max-height:92vh;overflow:auto"><div class="hdr"><h2>Presupuesto listo</h2><button class="btn sm" type="button" id="imgClose">Cerrar</button></div><p class="note"><b>Mantené presionada la imagen</b> para guardarla, o usá Compartir.</p><img id="imgOut" alt="Presupuesto" style="width:100%;border:1px solid var(--line);border-radius:6px;background:#fff"><div class="row"><button class="btn p" type="button" id="btnShareImg">Compartir imagen</button><button class="btn" type="button" id="btnCopyTxt">Copiar como texto</button><button class="btn" type="button" id="btnTryPdf">PDF</button></div></div>';document.body.appendChild(box);
+    $("imgClose").onclick=()=>box.classList.remove("on");
+    $("btnTryPdf").onclick=()=>{box.classList.remove("on");makePdf()};
+    $("btnShareImg").onclick=async()=>{const c=drawQuote(cur);c.toBlob(async b=>{const f=new File([b],cur.number+".png",{type:"image/png"});if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:"Presupuesto "+cur.number})}catch(e){}}else{const a=document.createElement("a");a.href=URL.createObjectURL(f);a.download=f.name;a.click()}},"image/png")};
+    $("btnCopyTxt").onclick=async()=>{const tx=quoteText(cur);try{await navigator.clipboard.writeText(tx);toast("Texto copiado, pegalo en WhatsApp")}catch(e){const ta=document.createElement("textarea");ta.value=tx;ta.style.cssText="position:fixed;left:0;top:0;width:90vw;height:50vh;z-index:99";document.body.appendChild(ta);ta.select();toast("Seleccioná y copiá el texto");ta.onblur=()=>ta.remove()}};}
+  const c=drawQuote(q);$("imgOut").src=c.toDataURL("image/png");box.classList.add("on");
+}
+$("btnImg").onclick=showImage;
+async function getDownloads(quiet){
+  return {save:async({filename,data})=>{
+    const file=new File([data],filename,{type:filename.endsWith(".pdf")?"application/pdf":"application/json"});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.share({files:[file],title:filename});return {status:"saved"}}catch(e){if(e&&e.name==="AbortError")throw {code:"declined"}}}
+    const a=document.createElement("a");a.href=URL.createObjectURL(file);a.download=filename;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},2000);return {status:"saved"}}};
+}
+function showPreview(blob,name){
+  let box=$("pdfPrev");
+  if(!box){box=document.createElement("div");box.id="pdfPrev";box.className="confirm on";box.innerHTML='<div class="box" style="max-width:720px;height:85vh"><div class="hdr"><h2>Vista previa del PDF</h2><button class="btn sm" type="button" id="pdfClose">Cerrar</button></div><p class="note">Esta vista no permite descargar archivos. Podés mantener presionado o usar el botón de compartir del visor para guardarlo.</p><iframe id="pdfFrame" title="PDF" style="flex:1;border:1px solid var(--line);border-radius:8px;width:100%"></iframe></div>';document.body.appendChild(box);$("pdfClose").onclick=()=>{box.classList.remove("on");URL.revokeObjectURL($("pdfFrame").src)}}
+  box.classList.add("on");$("pdfFrame").src=URL.createObjectURL(blob);
+}
+$("btnPdf").onclick=makePdf;
+
+// ---- nav ----
+function show(v){document.querySelectorAll(".view").forEach(s=>s.classList.toggle("on",s.id===v));document.querySelectorAll(".tabs button").forEach(b=>b.classList.toggle("on",b.dataset.v===v));
+  $("totals").classList.toggle("on",v==="vQuote");$("btnNew").hidden=v==="vQuote";
+  const titles={vQuote:cur&&cur.number?"Cotización "+cur.number:"Nueva cotización",vList:"Cotizaciones",vCat:"Catálogo de precios",vSet:"Ajustes"};$("hdrTitle").textContent=titles[v];
+  if(v==="vList")renderList();if(v==="vCat")renderCat();if(v==="vSet")fillSet();document.querySelector(".view.on").scrollTop=0}
+document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{if(cur&&b.dataset.v!=="vQuote")readForm();show(b.dataset.v)});
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+
+// ---- boot ----
+fillSet();loadLogo();
+if(quotes.length===0){
+  cur=blank();cur.client="Cliente de ejemplo";cur.ref="Portón 3x2 m (ejemplo, podés borrarlo)";cur.lines=[{desc:"Portón corredizo (fabricación)",qty:6,unit:"m²",price:65000},{desc:"Pintura antióxido + esmalte",qty:6,unit:"m²",price:9000},{desc:"Colocación en obra",qty:4,unit:"h",price:10000}];cur.notes="Incluye materiales, mano de obra y colocación.";
+}else cur=blank();
+fillForm();show("vQuote");
+})();
+</script>
+
+<script>if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js");</script>
+</body>
+</html>
